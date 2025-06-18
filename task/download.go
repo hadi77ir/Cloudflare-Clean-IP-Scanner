@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"fmt"
+	"github.com/Ptechgithub/CloudflareScanner/fragmenter"
 	"io"
 	"net"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/Ptechgithub/CloudflareScanner/utils"
 	"github.com/VividCortex/ewma"
+	utls "github.com/refraction-networking/utls"
 )
 
 const (
@@ -21,12 +23,20 @@ const (
 	defaultDisableDownload         = false
 	defaultTestNum                 = 10
 	defaultMinSpeed        float64 = 0.0
+	defaultHelloID                 = "chrome"
+	defaultFragmentEnabled = false
+)
+var (
+	defaultFragmentOptions = fragmenter.Options{}
 )
 
 var (
-	URL     = defaultURL
-	Timeout = defaultTimeout
-	Disable = defaultDisableDownload
+	URL           = defaultURL
+	Timeout       = defaultTimeout
+	Disable       = defaultDisableDownload
+	ClientHelloID = defaultHelloID
+	FragmentEnabled      = defaultFragmentEnabled
+	FragmentOptions = defaultFragmentOptions
 
 	TestCount = defaultTestNum
 	MinSpeed  = defaultMinSpeed
@@ -108,7 +118,10 @@ func getDialContext(ip *net.IPAddr) func(ctx context.Context, network, address s
 // return download Speed
 func downloadHandler(ip *net.IPAddr) float64 {
 	client := &http.Client{
-		Transport: &http.Transport{DialContext: getDialContext(ip)},
+		Transport: &http.Transport{
+			DialContext: getDialContext(ip),
+			DialTLSContext: getDialTLSContext(ip),
+		},
 		Timeout:   Timeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) > 10 {
@@ -179,4 +192,68 @@ func downloadHandler(ip *net.IPAddr) float64 {
 		contentRead += int64(bufferRead)
 	}
 	return e.Value() / (Timeout.Seconds() / 120)
+}
+
+func getDialTLSContext(ip *net.IPAddr) func(ctx context.Context, network string, addr string) (net.Conn, error) {
+	var fakeSourceAddr string
+	if isIPv4(ip.String()) {
+		fakeSourceAddr = fmt.Sprintf("%s:%d", ip.String(), TCPPort)
+	} else {
+		fakeSourceAddr = fmt.Sprintf("[%s]:%d", ip.String(), TCPPort)
+	}
+	return func(ctx context.Context, network string, addr string) (net.Conn, error) {
+		dialer := &net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}
+
+		// Override the default TLS dialer
+		conn, err := dialer.DialContext(ctx, "tcp", fakeSourceAddr)
+		if err != nil {
+			return nil, fmt.Errorf("dial error: %v", err)
+		}
+
+		// fragmenter support
+		if FragmentEnabled {
+			conn = fragmenter.WrapConn(conn, FragmentOptions)
+		}
+
+		// Create a uTLS connection
+		uConn := utls.UClient(conn, &utls.Config{
+			ServerName: addr,
+		}, getClientHelloId(ClientHelloID))
+
+		// Perform the TLS handshake
+		if err := uConn.HandshakeContext(ctx); err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("TLS handshake error: %v", err)
+		}
+		return conn, nil
+	}
+}
+
+func getClientHelloId(id string) utls.ClientHelloID {
+	switch id {
+	case "chrome":
+		return utls.HelloChrome_Auto
+		case "firefox":
+			return utls.HelloFirefox_Auto
+			case "safari":
+				return utls.HelloSafari_Auto
+	case "ios":
+		return utls.HelloIOS_Auto
+	case "qq":
+		return utls.HelloQQ_Auto
+	case "android":
+		return utls.HelloAndroid_11_OkHttp
+	case "edge":
+		return utls.HelloEdge_Auto
+	case "go":
+		return utls.HelloGolang
+	case "randomized":
+		return utls.HelloRandomized
+	case "360":
+		return utls.Hello360_Auto
+	}
+	return utls.HelloGolang
 }

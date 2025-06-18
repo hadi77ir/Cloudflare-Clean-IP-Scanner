@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/Ptechgithub/CloudflareScanner/fragmenter"
 	"net/http"
 	"os"
 	"runtime"
@@ -37,6 +38,13 @@ Options:
         Specify test port; port used for latency test/download test; (default port 443)
     -url https://speed.cloudflare.com/__down?bytes=52428800
         Specify test address; address used for latency test (HTTPing)/download test, default address is not guaranteed to be available, it is recommended to self-host;
+	
+    -fingerprint chrome
+        Browser imitation. use values from chrome, firefox, safari, ios, android, qq, edge, 360, randomized,go. 
+    -fragment none
+        Specify fragment settings in format of "minBytes,chunkSize,beforeStart,betweenChunks,randomChunks,randomDelays,delayRandomness"
+        for example: 67,47,100ms,100ms,false,false,0
+        set to "none" to disable.
 
     -httping
         Switch test mode; switch latency test mode to HTTP protocol, test address used is from [-url] parameter; (default TCPing)
@@ -75,12 +83,15 @@ Options:
 `
 	var minDelay, maxDelay, downloadTime int
 	var maxLossRate float64
+	var fragmentOptions string
 	flag.IntVar(&task.Routines, "n", 200, "Latency test threads")
 	flag.IntVar(&task.PingTimes, "t", 4, "Latency test times")
 	flag.IntVar(&task.TestCount, "dn", 10, "Download test count")
 	flag.IntVar(&downloadTime, "dt", 10, "Download test time")
 	flag.IntVar(&task.TCPPort, "tp", 443, "Specify test port")
 	flag.StringVar(&task.URL, "url", "https://speed.cloudflare.com/__down?bytes=52428800", "Specify test address")
+	flag.StringVar(&task.ClientHelloID, "fingerprint", "chrome", "TLS Fingerprint")
+	flag.StringVar(&fragmentOptions, "fragment", "none", "Fragment")
 
 	flag.BoolVar(&task.Httping, "httping", false, "Switch test mode")
 	flag.IntVar(&task.HttpingStatusCode, "httping-code", 0, "Valid status code")
@@ -111,6 +122,15 @@ Options:
 	utils.InputMaxLossRate = float32(maxLossRate)
 	task.Timeout = time.Duration(downloadTime) * time.Second
 	task.HttpingCFColomap = task.MapColoMap()
+	if fragmentOptions != "none" {
+		var err error
+		task.FragmentOptions, err = fragmenter.ParseOptions(fragmentOptions)
+		if err != nil {
+			fmt.Println("[!] Parsing options failed:", err)
+			os.Exit(1)
+			return
+		}
+	}
 
 	if printVersion {
 		println(version)

@@ -27,6 +27,7 @@ func (p *Ping) httping(ip *net.IPAddr) (int, time.Duration) {
 		Timeout: time.Second * 2,
 		Transport: &http.Transport{
 			DialContext: getDialContext(ip),
+			DialTLSContext: getDialTLSContext(ip),
 			//TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, // Skip certificate verification
 		},
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
