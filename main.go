@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/Ptechgithub/CloudflareScanner/fragmenter"
 	"net/http"
 	"os"
 	"runtime"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/Ptechgithub/CloudflareScanner/task"
 	"github.com/Ptechgithub/CloudflareScanner/utils"
+	"github.com/hadi77ir/fragmenter"
 )
 
 var (
@@ -42,8 +42,8 @@ Options:
     -fingerprint chrome
         Browser imitation. use values from chrome, firefox, safari, ios, android, qq, edge, 360, randomized,go. 
     -fragment none
-        Specify fragment settings in format of "minBytes,chunkSize,beforeStart,betweenChunks,randomChunks,randomDelays,delayRandomness"
-        for example: 67,47,100ms,100ms,false,false,0
+        Specify fragment settings in format of "packetsFrom,packetsTo,lengthMin,lengthMax,delayMin,delayMax"
+        for example: 0,1,10,20,10ms,15ms
         set to "none" to disable.
 
     -httping
@@ -124,7 +124,7 @@ Options:
 	task.HttpingCFColomap = task.MapColoMap()
 	if fragmentOptions != "none" {
 		var err error
-		task.FragmentOptions, err = fragmenter.ParseOptions(fragmentOptions)
+		task.FragmentOptions, err = fragmenter.ParseConfig(fragmentOptions)
 		if err != nil {
 			fmt.Println("[!] Parsing options failed:", err)
 			os.Exit(1)

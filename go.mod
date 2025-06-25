@@ -7,6 +7,7 @@ toolchain go1.24.3
 require (
 	github.com/VividCortex/ewma v1.2.0
 	github.com/cheggaaa/pb/v3 v3.1.5
+	github.com/hadi77ir/fragmenter v0.0.0-20250625151243-1ba4d1ac37f3
 	github.com/refraction-networking/utls v1.7.3
 )
 

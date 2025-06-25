@@ -3,7 +3,6 @@ package task
 import (
 	"context"
 	"fmt"
-	"github.com/Ptechgithub/CloudflareScanner/fragmenter"
 	"io"
 	"net"
 	"net/http"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/Ptechgithub/CloudflareScanner/utils"
 	"github.com/VividCortex/ewma"
+	"github.com/hadi77ir/fragmenter"
 	utls "github.com/refraction-networking/utls"
 )
 
@@ -24,18 +24,19 @@ const (
 	defaultTestNum                 = 10
 	defaultMinSpeed        float64 = 0.0
 	defaultHelloID                 = "chrome"
-	defaultFragmentEnabled = false
-)
-var (
-	defaultFragmentOptions = fragmenter.Options{}
+	defaultFragmentEnabled         = false
 )
 
 var (
-	URL           = defaultURL
-	Timeout       = defaultTimeout
-	Disable       = defaultDisableDownload
-	ClientHelloID = defaultHelloID
-	FragmentEnabled      = defaultFragmentEnabled
+	defaultFragmentOptions *fragmenter.FragmentConfig = nil
+)
+
+var (
+	URL             = defaultURL
+	Timeout         = defaultTimeout
+	Disable         = defaultDisableDownload
+	ClientHelloID   = defaultHelloID
+	FragmentEnabled = defaultFragmentEnabled
 	FragmentOptions = defaultFragmentOptions
 
 	TestCount = defaultTestNum
@@ -119,10 +120,10 @@ func getDialContext(ip *net.IPAddr) func(ctx context.Context, network, address s
 func downloadHandler(ip *net.IPAddr) float64 {
 	client := &http.Client{
 		Transport: &http.Transport{
-			DialContext: getDialContext(ip),
+			DialContext:    getDialContext(ip),
 			DialTLSContext: getDialTLSContext(ip),
 		},
-		Timeout:   Timeout,
+		Timeout: Timeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) > 10 {
 				return http.ErrUseLastResponse
@@ -215,6 +216,11 @@ func getDialTLSContext(ip *net.IPAddr) func(ctx context.Context, network string,
 
 		// fragmenter support
 		if FragmentEnabled {
+			tcpConn, ok := conn.(*net.TCPConn)
+			if ok {
+				// Set TCP_NODELAY to true, to prevent kernel from reconstructing fragments
+				_ = tcpConn.SetNoDelay(true)
+			}
 			conn = fragmenter.WrapConn(conn, FragmentOptions)
 		}
 
@@ -236,10 +242,10 @@ func getClientHelloId(id string) utls.ClientHelloID {
 	switch id {
 	case "chrome":
 		return utls.HelloChrome_Auto
-		case "firefox":
-			return utls.HelloFirefox_Auto
-			case "safari":
-				return utls.HelloSafari_Auto
+	case "firefox":
+		return utls.HelloFirefox_Auto
+	case "safari":
+		return utls.HelloSafari_Auto
 	case "ios":
 		return utls.HelloIOS_Auto
 	case "qq":
